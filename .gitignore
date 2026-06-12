@@ -1,0 +1,11 @@
+*.env
+.env
+.env.*
+*credentials*.json
+*credential*.json
+*service-account*.json
+*service_account*.json
+*api-key*.json
+*apikey*.json
+*.pem
+*.key
