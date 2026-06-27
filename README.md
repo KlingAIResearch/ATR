@@ -1,5 +1,8 @@
 ﻿# ATR Framework
 
+**Making Image Editing Easier via Adaptive Task Reformulation with Agentic Executions**
+Paper: [arXiv:2604.15917](https://arxiv.org/abs/2604.15917)
+
 ATR Framework is an automatic tool-chain framework for ImgEdit image editing tasks. Given an input image and an editing instruction, the framework first calls Gemini for image understanding and routing, then selects the Qwen agent or Banana agent tool chain according to the routing class. It saves intermediate results, the final image, and trace files.
 
 Overall workflow:
