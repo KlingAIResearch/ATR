@@ -10,6 +10,7 @@ from typing import List, Dict
 
 from google import genai
 from google.genai import types
+from core.runtime_config import create_genai_client, get_gemini_model
 
 # ==========================================
 # Configuration
@@ -17,7 +18,7 @@ from google.genai import types
 # Credentials are read from the GOOGLE_APPLICATION_CREDENTIALS environment variable.
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GOOGLE_PROJECT_ID")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION") or os.environ.get("GOOGLE_LOCATION")
-GEMINI_MODEL_NAME = "gemini-3-flash-preview"
+GEMINI_MODEL_NAME = get_gemini_model("gemini-3-flash-preview")
 
 INPUT_JSONL = "./examples/data/input.jsonl"
 OUTPUT_JSONL = "./examples/output/data_captions.jsonl"
@@ -149,7 +150,7 @@ def process_dataset(input_path: str, output_path: str):
     Process the entire dataset
     """
     # Initialize Gemini client
-    client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+    client = create_genai_client()
     
     # Read input data
     if not os.path.exists(input_path):

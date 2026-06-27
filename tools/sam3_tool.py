@@ -6,11 +6,12 @@ from PIL import Image
 
 # ================= Configuration =================
 
-# Code root directory (SAM3 library location)
-CODE_ROOT = "./examples/sam3/sam3"
+# Root of the GitHub SAM3 code repo. This directory must contain the Python
+# package directory named "sam3" so imports like "from sam3.model_builder" work.
+CODE_ROOT = os.environ.get("ATR_SAM3_DIR", "./examples/sam3_repo")
 
-# Model checkpoint path
-CHECKPOINT_PATH = "./examples/sam3/model/sam3.pt"
+# SAM3 checkpoint file downloaded from ModelScope.
+CHECKPOINT_PATH = os.environ.get("ATR_SAM3_CHECKPOINT", "./examples/sam3_model/sam3.pt")
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 

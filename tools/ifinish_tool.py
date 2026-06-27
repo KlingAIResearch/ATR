@@ -4,6 +4,7 @@ import json
 from PIL import Image
 from google import genai
 from google.genai import types
+from core.runtime_config import create_genai_client
 
 def ifinish_tool(original_image_path: str, current_image_path: str, instruction: str, project_id: str, location: str, model_name: str) -> dict:
     """
@@ -13,7 +14,7 @@ def ifinish_tool(original_image_path: str, current_image_path: str, instruction:
     if not os.path.exists(original_image_path) or not os.path.exists(current_image_path):
         return {"status": "error", "message": "Input image path not found."}
 
-    client = genai.Client(vertexai=True, project=project_id, location=location)
+    client = create_genai_client()
     
     img_orig = Image.open(original_image_path).convert("RGB")
     img_curr = Image.open(current_image_path).convert("RGB")

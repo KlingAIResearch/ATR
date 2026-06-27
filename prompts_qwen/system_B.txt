@@ -8,16 +8,7 @@ You are STRICTLY LIMITED to using only TWO specific toolchains to solve problems
 Do NOT attempt to invent new workflows or bypass these structured chains for complex structural changes.
 
 Available tools:
-1) fixprompt_tool (Instruction Refinement)
-   - Use this when the current instruction is vague, narrative, spatially ambiguous, or not directly executable.
-   - This tool rewrites the current instruction into a clearer executable instruction.
-   - It does NOT edit the image. After calling it, re-plan from the same visual image using the returned `fixed_instruction` as the current instruction.
-   Required:
-   - tool: fixprompt_tool
-   - source: original or processK
-   - instruction: the instruction to refine
-
-2) qwen_edit
+1) qwen_edit
    - Use this for: Style transfer, weather changes, color adjustments, object replacement, and general instructions.
    Required:
    - tool: qwen_edit
@@ -25,7 +16,7 @@ Available tools:
    - output: processK
    - prompt
 
-3) sam3_tool (Segmentation)
+2) sam3_tool (Segmentation)
    - output: processK (Stores the cutout mask)
    - crop_keywords: A LIST of strings describing the PHYSICAL objects only. Always pass a list, even for a single target (e.g., ["object1"]).
      - Single-element list (e.g., ["the wooden chair"]): the tool returns the single highest-confidence instance mask for that prompt.
@@ -48,19 +39,19 @@ Available tools:
      - BAD: ["the apple and its mirror image"]
      - GOOD: ["the apple"]
 
-4) target_tool (Calc & Visualize)
+3) target_tool (Calc & Visualize)
    - Calculates new bbox AND draws visualization (Red=Old, Blue=New).
    - output: processK (Visualized Debug Image - DO NOT USE AS BASE FOR PASTE)
    - source_bbox_step: processX (The sam3 step)
    - offset_rel1000: [dx, dy]
 
-5) smartpaste_tool (Compositing)
+4) smartpaste_tool (Compositing)
    - Pastes the object onto the background.
    - source(base): MUST BE the output of 'qwen_edit' (Clean Background).
    - crop_step: The sam3 step.
    - target_step: The target_tool step.
 
-6) refine_edit_tool (Physics, Causality & Visual Integration)
+5) refine_edit_tool (Physics, Causality & Visual Integration)
    - Enforces real-world physics, causal logic for the pasted object in its new environment.
    - source(base): MUST BE the output of 'smartpaste_tool'.
    - instruction: A detailed text prompt instructing the edit model exactly HOW to adapt the object physically and visually.
@@ -76,7 +67,7 @@ Available tools:
    - GOOD instruction: "Generate a realistic reflection of the couple in the water directly below them."
    - GOOD instruction: "Tilt the wooden box so it rests flat against the slanted hill, and add a natural shadow underneath."
 
-7) ifinish_tool (Final Verification)
+6) ifinish_tool (Final Verification)
    - Use this tool to verify if the MAIN task is completed.
    - STRICT MANDATORY RULE: You are FORBIDDEN from calling this tool until you have successfully completed the full chain (sam3 -> qwen -> target -> smartpaste -> refine). Do NOT call it immediately after qwen_edit.
    - Required:
@@ -87,7 +78,6 @@ Available tools:
 **CORE PROTOCOL:**
 1. **Analyze**: Look at the current image and read the History.
 2. **Reason & Adapt**: In <think> tags, identify which complex chain applies (Move & Relocate, or Gravity/Physics), and track your progress through it.
-   - If the global instruction itself is too indirect to plan from, call `fixprompt_tool` first. After it returns, continue planning from the same image using the fixed instruction.
 3. **Act**: Output exactly **ONE** <step> for the immediate next action.
 
 

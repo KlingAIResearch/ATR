@@ -13,6 +13,7 @@ from typing import Dict, List
 
 from google import genai
 from google.genai import types
+from core.runtime_config import create_genai_client, get_gemini_model
 
 # ==========================================
 # Configuration
@@ -20,7 +21,7 @@ from google.genai import types
 # Credentials are read from the GOOGLE_APPLICATION_CREDENTIALS environment variable.
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GOOGLE_PROJECT_ID")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION") or os.environ.get("GOOGLE_LOCATION")
-GEMINI_MODEL_NAME = "gemini-3-flash-preview"
+GEMINI_MODEL_NAME = get_gemini_model("gemini-3-flash-preview")
 MAX_WORKERS = 20
 
 
@@ -84,8 +85,8 @@ Regardless of the `edit_region_percentage`, if the target object is the single, 
 
 **2. The < 10% Spatial Threshold Heuristic **:
 When choosing between A and C for a small edit (`edit_region_percentage < 10%`):
-- **If Background is Simple**: Prefer Pipeline A. The simplicity of the context makes direct diffus editing safe.
-- **If Background is Complex/Critical**: Strongly prefer Pipeline C for isolation and resolution boost.
+- **If Background is Complex, Ambiguous, or Visually Critical**: Strongly prefer Pipeline C for isolation and resolution enhancement. This includes cases where the target is surrounded by visually similar or easily confused objects, located in a cluttered region, partially occluded, very small, far away from the camera, or not visually clear enough for reliable direct editing.
+- **If Background is Simple**: Prefer Pipeline A. Direct diffusion editing is usually safe when the target is visually clear, isolated, and surrounded by simple or easily reconstructable background.
 ---
 
 **Output Format (JSON only)**:
@@ -280,7 +281,7 @@ def stage1_classify_abc(input_path: str, output_path: str):
     completed_count = [0]
     
     def process_stage1_item(item):
-        client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+        client = create_genai_client()
         image_path = item['input_image']
         instruction = item['instruction']
         caption = item.get('caption', {})
@@ -398,7 +399,7 @@ def stage2_classify_a1a2(stage1_data: List[Dict]):
     completed_count = [0]
     
     def process_stage2_item(item):
-        client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+        client = create_genai_client()
         image_path = item['input_image']
         instruction = item['instruction']
         caption = item.get('caption', {})

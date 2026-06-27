@@ -28,10 +28,27 @@ from diffusers import QwenImageEditPlusPipeline
 PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, PROJECT_ROOT)
 
+def _load_config_from_argv() -> None:
+    if "--config" not in sys.argv:
+        return
+    try:
+        config_path = sys.argv[sys.argv.index("--config") + 1]
+    except IndexError:
+        return
+    try:
+        from core.runtime_config import apply_runtime_config, load_runtime_config
+        apply_runtime_config(load_runtime_config(config_path))
+    except Exception as exc:
+        print(f"[!] Warning: failed to load config before imports: {exc}")
+
+
+_load_config_from_argv()
+
 try:
     from core.captioner import generate_caption as _generate_caption
     from core.router import call_gemini, STAGE1_PROMPT_ABC, STAGE2_PROMPT_A1A2
     from core.agent_session_qwen import AgentSession as AgentSessionQwen
+    from core.runtime_config import create_genai_client, get_qwen_image_edit_path
     from google import genai
 except ImportError as e:
     print(f"[✗] Failed to import core modules: {e}")
@@ -51,7 +68,7 @@ LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION") or os.environ.get("GOOGLE_LOC
 GEMINI_MODEL_NAME = "gemini-3-flash-preview"
 
 # Editor Model Configuration
-EDITOR_ID = "./examples/models/Qwen-Image-Edit-2509"
+EDITOR_ID = get_qwen_image_edit_path("./examples/models/Qwen-Image-Edit-2509")
 
 AGENT_TYPE = None
 TEST_INDEX = None
@@ -127,7 +144,7 @@ def step_1_caption(image_path: str, instruction: str, output_dir: str, client=No
     
     try:
         if client is None:
-            client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+            client = create_genai_client()
         
         caption_data = _generate_caption(image_path, instruction, client)
         
@@ -156,7 +173,7 @@ def step_2_router(instruction: str, caption_data: Dict, image_path: str, output_
     
     try:
         if client is None:
-            client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+            client = create_genai_client()
         
         # Stage 1: A/B/C Classification
         caption_str = json.dumps(caption_data)
@@ -221,6 +238,7 @@ def step_3_execute(
     image_path: str,
     routing_class: str,
     output_dir: str,
+    test_index=0,
     agent_type: str = "qwen",
     editor_pipe=None
 ) -> Dict:
@@ -235,7 +253,7 @@ def step_3_execute(
         if agent_type.lower() == "banana":
             from core.agent_session_banana import AgentSession as AgentSessionBanana
             session = AgentSessionBanana(
-                index=0,
+                index=test_index,
                 original_instruction=instruction,
                 working_instruction=instruction,
                 original_path=image_path,
@@ -244,7 +262,7 @@ def step_3_execute(
             )
         else:
             session = AgentSessionQwen(
-                index=0,
+                index=test_index,
                 original_instruction=instruction,
                 working_instruction=instruction,
                 original_path=image_path,
@@ -350,6 +368,7 @@ Examples:
     parser.add_argument("--test-json", required=False, help="JSON test case string")
     parser.add_argument("--json-file", required=False, help="Path to JSON file")
     parser.add_argument("--agent", required=False, default="qwen", help="Agent: qwen or banana")
+    parser.add_argument("--config", required=False, help="Path to runtime config JSON")
     
     args = parser.parse_args()
     
@@ -421,7 +440,7 @@ Examples:
     
     print("[*] Initializing Gemini client...")
     try:
-        gemini_client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+        gemini_client = create_genai_client()
     except Exception as e:
         print(f"[!] Warning: Could not initialize Gemini client: {e}")
         gemini_client = None
@@ -441,6 +460,7 @@ Examples:
             editor_pipe.set_progress_bar_config(disable=True)
         except Exception as e:
             print(f"[!] Warning: Could not initialize Qwen-Edit model: {e}")
+            return 1
     try:
         caption_data = step_1_caption(image_path, instruction, output_dir, gemini_client)
         routing_data = step_2_router(instruction, caption_data, image_path, output_dir, gemini_client)
@@ -449,6 +469,7 @@ Examples:
             image_path=image_path,
             routing_class=routing_data.get("class", "A1"),
             output_dir=output_dir,
+            test_index=test_index,
             agent_type=args.agent,
             editor_pipe=editor_pipe
         )

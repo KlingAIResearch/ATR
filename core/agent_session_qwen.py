@@ -28,6 +28,7 @@ if TOOL_DIR not in sys.path:
 
 from google import genai
 from google.genai import types
+from core.runtime_config import create_genai_client, get_gemini_model, get_qwen_image_edit_path
 
 # ==========================================
 # 1. Config & Auth
@@ -35,11 +36,11 @@ from google.genai import types
 # Credentials are read from the GOOGLE_APPLICATION_CREDENTIALS environment variable.
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GOOGLE_PROJECT_ID")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION") or os.environ.get("GOOGLE_LOCATION")
-GEMINI_MODEL_NAME = "gemini-3-flash-preview"
+GEMINI_MODEL_NAME = get_gemini_model("gemini-3-flash-preview")
 
 META_JSON = "./examples/data/data_decisions_filtered.jsonl"
 OUT_ROOT  = "./examples/output/qwen_pipeline"
-EDITOR_ID  = "./examples/models/Qwen-Image-Edit-2509"
+EDITOR_ID  = get_qwen_image_edit_path("./examples/models/Qwen-Image-Edit-2509")
 TRACE_FILENAME = "trace.json"
 
 # ==========================================
@@ -108,6 +109,7 @@ class AgentSession:
         self.current_image_path = original_path
         self.history = []
         self.step_count = 0
+        self.fixprompt_used = False
         self.max_steps = 10
         
         # Files tracking
@@ -164,7 +166,26 @@ class AgentSession:
 
         # 2. Dynamic Instruction
         if self.step_count == 0:
+            fixprompt_hint = ""
+            if self.routing_class in ("B", "C") and not self.fixprompt_used:
+                fixprompt_hint = (
+                    "Additional available tool:\n"
+                    "If the instruction is vague, underspecified, uses unclear references or pronouns, "
+                    "contains spatial ambiguity, or requires reasoning about the target object, attributes, relationships, "
+                    "or intended edit before it becomes directly executable, "
+                    "you may call `fixprompt_tool` to rewrite it before formal planning starts.\n"
+                    "This tool does NOT edit the image. If you use it, the system will replace the instruction "
+                    "with the returned fixed instruction and restart formal planning from Step 1 on the same original image.\n"
+                    "If the instruction is already clear, do NOT call this tool.\n"
+                    "Required format:\n"
+                    "<step>\n"
+                    "tool: fixprompt_tool\n"
+                    "source: original\n"
+                    "instruction: the instruction to refine\n"
+                    "</step>"
+                )
             user_msg = (
+                f"{fixprompt_hint}\n\n"
                 f"**INSTRUCTION**: {self.instruction}\n\n"
                 f"**CURRENT IMAGE**: This is the Original Image.\n\n"
                 f"**TASK**: Analyze the image and formulate a strategy. "
@@ -173,8 +194,6 @@ class AgentSession:
             )
         else:
             current_image_desc = f"Result of Step {self.step_count}."
-            if self.history and self.history[-1].get("tool") == "fixprompt_tool":
-                current_image_desc = "Unchanged image after fixprompt_tool."
             user_msg = (
                 f"**INSTRUCTION**: {self.instruction}\n\n"
                 f"**CURRENT IMAGE**: {current_image_desc}\n"
@@ -186,8 +205,24 @@ class AgentSession:
 
         return user_msg
 
+    def _can_use_fixprompt_step0(self):
+        return self.routing_class in ("B", "C") and self.step_count == 0 and not self.fixprompt_used
+
+    def _execute_fixprompt_step0(self, step_data):
+        src_name = step_data.get("source", "original")
+        src = self.file_map.get(src_name, self.file_map.get("original"))
+        raw_instruction = step_data.get("instruction", self.instruction)
+        fixed_instruction = fixprompt_tool(src, raw_instruction)
+
+        self.instruction = fixed_instruction
+        self.fixprompt_used = True
+        step_data["source"] = src_name
+        step_data["raw_instruction"] = raw_instruction
+        step_data["fixed_instruction"] = fixed_instruction
+        return fixed_instruction
+
     def _call_gemini_planner(self, prompt_text, image_path=None):
-        client = genai.Client(vertexai=True, project=PROJECT_ID, location=LOCATION)
+        client = create_genai_client()
         
         # Use the explicitly provided image (e.g. debug visualization) if given,
         # otherwise fall back to the current working image.
@@ -419,14 +454,7 @@ class AgentSession:
                     raise FileNotFoundError("Crop tool output missing")
 
             elif tool == "fixprompt_tool":
-                src = get_path(step_data.get("source", "original"))
-                raw_instruction = step_data.get("instruction", self.instruction)
-                fixed_instruction = fixprompt_tool(src, raw_instruction)
-
-                self.instruction = fixed_instruction
-                step_data["fixed_instruction"] = fixed_instruction
-                shutil.copy(src, final_path)
-                debug_vis_path = src
+                raise ValueError("fixprompt_tool is only available as step0 before formal planning starts.")
 
             elif tool == "qwen_edit":
                 src = get_path(step_data.get("source", "original"))
@@ -490,6 +518,8 @@ class AgentSession:
         except Exception as e:
             print(f"  [Exec Except] {e}")
             traceback.print_exc()
+            step_data["ERROR"] = str(e)
+            step_data["exception_type"] = type(e).__name__
             if not os.path.exists(final_path):
                 try: shutil.copy(get_path("original"), final_path)
                 except: pass
@@ -567,7 +597,40 @@ class AgentSession:
                 self.trace_data["steps"].append(step_record)
                 self._save_trace()
                 break
-                
+
+            if step_data.get("tool") == "fixprompt_tool":
+                step_record["step"] = 0
+                step_record["tool"] = "fixprompt_tool"
+                step_record["params"] = step_data
+                step_record["output_name"] = "instruction_only"
+
+                if not self._can_use_fixprompt_step0():
+                    step_record["status"] = "failed"
+                    step_record["error"] = "fixprompt_tool is only available once before formal Step 1 for routing class B/C."
+                    self.trace_data["steps"].append(step_record)
+                    self.trace_data["status"] = "execution_failed"
+                    self._save_trace()
+                    break
+
+                try:
+                    fixed_instruction = self._execute_fixprompt_step0(step_data)
+                    step_record["status"] = "success"
+                    step_record["raw_instruction"] = step_data.get("raw_instruction", "")
+                    step_record["fixed_instruction"] = fixed_instruction
+                    self.trace_data["steps"].append(step_record)
+                    self._save_trace()
+                    img_for_planner = self.current_image_path
+                    print(f"[{self.index}] fixprompt_tool completed as step0. Restarting formal Step 1.")
+                    continue
+                except Exception as e:
+                    step_record["status"] = "failed"
+                    step_record["error"] = str(e)
+                    step_record["exception_type"] = type(e).__name__
+                    self.trace_data["steps"].append(step_record)
+                    self.trace_data["status"] = "execution_failed"
+                    self._save_trace()
+                    break
+                 
             out_path, status, debug_vis_path = self._execute_tool(step_data, self.step_count + 1)
             
             step_record["tool"] = step_data.get("tool")
@@ -580,9 +643,7 @@ class AgentSession:
             
             # Success: advance state
             if status == "success":
-                is_non_visual_step = step_data.get("tool") == "fixprompt_tool"
-                if not is_non_visual_step:
-                    self.current_image_path = out_path
+                self.current_image_path = out_path
                 self.history.append(step_record)
                 self.step_count += 1
 
@@ -602,9 +663,7 @@ class AgentSession:
                         self._save_trace()
                         break
                 
-                if is_non_visual_step:
-                    img_for_planner = debug_vis_path or self.current_image_path
-                elif debug_vis_path and os.path.exists(debug_vis_path):
+                if debug_vis_path and os.path.exists(debug_vis_path):
                     img_for_planner = debug_vis_path
                 else:
                     img_for_planner = out_path

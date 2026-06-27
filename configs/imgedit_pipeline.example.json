@@ -1,0 +1,23 @@
+﻿{
+  "jsonl_file": "/path/to/your/input.jsonl",
+  "output_dir": "/path/to/your/output/results",
+  "agent": "qwen",
+  "max_samples": null,
+  "gpu_ids": [0],
+  "max_workers": 1,
+  "google": {
+    "auth_mode": "vertex",
+    "application_credentials": "/path/to/google_service_account.json",
+    "project_id": "your-google-cloud-project-id",
+    "location": "global",
+    "api_key": ""
+  },
+  "models": {
+    "gemini_model": "gemini-3-flash-preview",
+    "qwen_image_edit_path": "/path/to/Qwen-Image-Edit-2509",
+    "sam3_dir": "/path/to/github/sam3/repo",
+    "sam3_checkpoint": "/path/to/modelscope/sam3.pt"
+  }
+}
+
+

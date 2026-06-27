@@ -1,8 +1,0 @@
-{"index": 0, "input_image": "./examples/images/00000.jpg", "instruction": "Remove the 5 of spades card from the structure."}
-{"index": 1, "input_image": "./examples/images/00001.jpg", "instruction": "Remove the water from the glass cup."}
-{"index": 2, "input_image": "./examples/images/00002.jpg", "instruction": "Remove the tulips from the scene."}
-{"index": 3, "input_image": "./examples/images/00003.jpg", "instruction": "Remove the glass of water from the image."}
-{"index": 4, "input_image": "./examples/images/00004.jpg", "instruction": "Remove the statue of the child holding grapes."}
-{"index": 5, "input_image": "./examples/images/00005.jpg", "instruction": "Remove the car from the image."}
-{"index": 6, "input_image": "./examples/images/00006.jpg", "instruction": "Move the ladder to the left."}
-{"index": 7, "input_image": "./examples/images/00007.jpg", "instruction": "Remove the white bowl from the table."}

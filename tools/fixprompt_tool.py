@@ -3,6 +3,7 @@ import io
 from PIL import Image
 from google import genai
 from google.genai import types
+from core.runtime_config import create_genai_client, get_gemini_model
 
 # ==========================================
 # Configuration
@@ -11,7 +12,7 @@ from google.genai import types
 
 PROJECT_ID = os.environ.get("GOOGLE_CLOUD_PROJECT") or os.environ.get("GOOGLE_PROJECT_ID")
 LOCATION = os.environ.get("GOOGLE_CLOUD_LOCATION") or os.environ.get("GOOGLE_LOCATION")
-GEMINI_MODEL_NAME = "gemini-3-flash-preview"
+GEMINI_MODEL_NAME = get_gemini_model("gemini-3-flash-preview")
 
 # ==========================================
 # System Prompt with Few-Shot Examples
@@ -100,11 +101,7 @@ def fixprompt_tool(image_path: str, instruction: str) -> str:
             img_bytes = f.read()
 
         # 2. Initialize Client
-        client = genai.Client(
-            vertexai=True, 
-            project=PROJECT_ID, 
-            location=LOCATION
-        )
+        client = create_genai_client()
 
         # 3. Call Gemini
         # We pass the System Prompt + Image + User Instruction
